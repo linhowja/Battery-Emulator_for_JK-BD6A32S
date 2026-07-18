@@ -29,6 +29,7 @@
 #include "HYUNDAI-IONIQ-28-BATTERY.h"
 #include "IMIEV-CZERO-ION-BATTERY.h"
 #include "JAGUAR-IPACE-BATTERY.h"
+#include "JK-BD6A32S-LV-PYLON.h"
 #include "KIA-64FD-BATTERY.h"
 #include "KIA-E-GMP-BATTERY.h"
 #include "KIA-HYUNDAI-64-BATTERY.h"
@@ -39,6 +40,7 @@
 #include "NISSAN-LEAF-BATTERY.h"
 #include "ORION-BMS.h"
 #include "PYLON-BATTERY.h"
+#include "JK-BD6A32S-LV-PYLON.h"
 #include "RANGE-ROVER-PHEV-BATTERY.h"
 #include "RELION-LV-BATTERY.h"
 #include "RENAULT-KANGOO-BATTERY.h"
@@ -159,6 +161,8 @@ const char* name_for_battery_type(BatteryType type) {
       return NissanLeafBattery::Name;
     case BatteryType::Pylon:
       return PylonBattery::Name;
+    case BatteryType::JkBd6A32sLvPylon:
+      return JkBd6A32sLvPylonBattery::Name;
     case BatteryType::DalyBms:
       return DalyBms::Name;
     case BatteryType::RjxzsBms:
@@ -284,6 +288,8 @@ Battery* create_battery(BatteryType type) {
       return new NissanLeafBattery();
     case BatteryType::Pylon:
       return new PylonBattery();
+    case BatteryType::JkBd6A32sLvPylon:
+      return new JkBd6A32sLvPylonBattery();
     case BatteryType::DalyBms:
       return new DalyBms();
     case BatteryType::RjxzsBms:
@@ -388,6 +394,9 @@ void setup_battery() {
         break;
       case BatteryType::Pylon:
         battery2 = new PylonBattery(&datalayer.battery2, nullptr, can_config.battery_double);
+        break;
+      case BatteryType::JkBd6A32sLvPylon:
+        battery2 = new JkBd6A32sLvPylonBattery(&datalayer.battery2, nullptr, can_config.battery_double);
         break;
       case BatteryType::SantaFePhev:
         battery2 = new SantaFePhevBattery(&datalayer.battery2, can_config.battery_double);
