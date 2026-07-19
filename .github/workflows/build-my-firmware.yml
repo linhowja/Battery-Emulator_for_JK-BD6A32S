@@ -1,0 +1,66 @@
+name: Build My Custom Firmware
+
+# 設定為只能「手動觸發」，絕不自動亂跑
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '請輸入版本名稱 (例如: v1.0.0-JK)'
+        required: true
+        default: 'v1.0.0-JK'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: 📥 取得最新程式碼
+      uses: actions/checkout@v4
+
+    - name: 📁 建立輸出資料夾
+      run: |
+        mkdir output
+        echo "Version: ${{ github.event.inputs.version }}" > output/info.txt
+        echo "Build Date: $(date -u)" >> output/info.txt
+
+    - name: ⚙️ 安裝編譯環境 (Python & PlatformIO)
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    - run: pip install --upgrade platformio esptool
+
+    - name: 🛠 編譯 Lilygo T-CAN
+      run: |
+        pio run -e lilygo_330
+        cp .pio/build/lilygo_330/firmware.bin output/BE_${{ github.event.inputs.version }}_LilygoT-CAN485.ota.bin
+        esptool --chip esp32 merge-bin -o .pio/build/lilygo_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 4MB 0x1000 .pio/build/lilygo_330/bootloader.bin 0x8000 .pio/build/lilygo_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/lilygo_330/firmware.bin
+        mv .pio/build/lilygo_330/factory.bin output/BE_${{ github.event.inputs.version }}_LilygoT-CAN485.factory.bin
+
+    - name: 🛠 編譯 Lilygo 2-CAN
+      run: |
+        pio run -e lilygo_2CAN_330
+        cp .pio/build/lilygo_2CAN_330/firmware.bin output/BE_${{ github.event.inputs.version }}_LilygoT-2CAN.ota.bin
+        esptool --chip esp32s3 merge-bin -o .pio/build/lilygo_2CAN_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 16MB 0x0000 .pio/build/lilygo_2CAN_330/bootloader.bin 0x8000 .pio/build/lilygo_2CAN_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/lilygo_2CAN_330/firmware.bin
+        mv .pio/build/lilygo_2CAN_330/factory.bin output/BE_${{ github.event.inputs.version }}_LilygoT-2CAN.factory.bin
+
+    - name: 🛠 編譯 Stark
+      run: |
+        pio run -e stark_330
+        cp .pio/build/stark_330/firmware.bin output/BE_${{ github.event.inputs.version }}_StarkCMR.ota.bin
+        esptool --chip esp32 merge-bin -o .pio/build/stark_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 8MB 0x1000 .pio/build/stark_330/bootloader.bin 0x8000 .pio/build/stark_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/stark_330/firmware.bin
+        mv .pio/build/stark_330/factory.bin output/BE_${{ github.event.inputs.version }}_StarkCMR.factory.bin
+
+    - name: 📦 打包 Artifact 暫存檔 (保證一定能下載)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Firmware-Outputs
+        path: output
+
+    - name: 📡 發佈到 GitHub Releases 頁面
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.event.inputs.version }}
+        files: output/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
