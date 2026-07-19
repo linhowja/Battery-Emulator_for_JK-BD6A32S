@@ -15,111 +15,106 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Set release tag
-        id: vars
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-          fi
+    - name: Set release tag
+      id: vars
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+        fi
+        
+    - name: Checkout code at tag
+      uses: actions/checkout@v7
+      with:
+        ref: refs/tags/${{ steps.vars.outputs.tag }}
 
-      - name: Checkout code at tag
-        uses: actions/checkout@v7
-        with:
-          ref: refs/tags/${{ steps.vars.outputs.tag }}
+    # 🚀 優化 1：info.txt 加入 Commit Hash 與時間戳記
+    - name: Build artifacts
+      run: |
+        mkdir output
+        echo "Tag: ${{ steps.vars.outputs.tag }}" > output/info.txt
+        echo "Commit: $(git rev-parse HEAD)" >> output/info.txt
+        echo "Date: $(date -u)" >> output/info.txt
+        
+    - uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cache/pip
+          ~/.platformio/.cache
+        key: ${{ runner.os }}-pio
 
-      # --- 🚀 優化點：建立更詳細的版本與時間紀錄資訊檔 ---
-      - name: Build artifacts base
-        run: |
-          mkdir output
-          echo "Tag: ${{ steps.vars.outputs.tag }}" > output/info.txt
-          echo "Commit: $(git rev-parse HEAD)" >> output/info.txt
-          echo "Date: $(date -u)" >> output/info.txt
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.13'
+        
+    - name: Install PlatformIO Core
+      run: pip install --upgrade platformio esptool
 
-      - uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.platformio/.cache
-          key: ${{ runner.os }}-pio
+    - name: 🛠 Build ota image for Lilygo T-CAN
+      run: |
+        pio run -e lilygo_330
+        cp .pio/build/lilygo_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_LilygoT-CAN485.ota.bin
+        
+    - name: 🛠 Build factory image for Lilygo T-CAN
+      run: |
+        esptool --chip esp32 merge-bin -o .pio/build/lilygo_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 4MB 0x1000 .pio/build/lilygo_330/bootloader.bin 0x8000 .pio/build/lilygo_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/lilygo_330/firmware.bin
+        mv .pio/build/lilygo_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_LilygoT-CAN485.factory.bin
+        
+    - name: 🛠 Build ota image for Lilygo 2-CAN
+      run: |
+        pio run -e lilygo_2CAN_330
+        cp .pio/build/lilygo_2CAN_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_LilygoT-2CAN.ota.bin
+        
+    - name: 🛠 Build factory image for Lilygo 2-CAN
+      run: |
+        esptool --chip esp32s3 merge-bin -o .pio/build/lilygo_2CAN_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 16MB 0x0000 .pio/build/lilygo_2CAN_330/bootloader.bin 0x8000 .pio/build/lilygo_2CAN_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/lilygo_2CAN_330/firmware.bin
+        mv .pio/build/lilygo_2CAN_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_LilygoT-2CAN.factory.bin
+        
+    - name: 🛠 Build ota image for Stark
+      run: |
+        pio run -e stark_330
+        cp .pio/build/stark_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_StarkCMR.ota.bin
+        
+    - name: 🛠 Build factory image for Stark
+      run: |
+        esptool --chip esp32 merge-bin -o .pio/build/stark_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 8MB 0x1000 .pio/build/stark_330/bootloader.bin 0x8000 .pio/build/stark_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/stark_330/firmware.bin
+        mv .pio/build/stark_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_StarkCMR.factory.bin
+        
+    - name: 🛠 Build ota image for Waveshare ESP32-S3-RS485-CAN
+      run: |
+        pio run -e waveshare_330
+        cp .pio/build/waveshare_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_WaveshareESP32S3RS485CAN.ota.bin
+        
+    - name: 🛠 Build factory image for Waveshare ESP32-S3-RS485-CAN
+      run: |
+        esptool --chip esp32s3 merge-bin -o .pio/build/waveshare_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 16MB 0x0000 .pio/build/waveshare_330/bootloader.bin 0x8000 .pio/build/waveshare_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/waveshare_330/firmware.bin
+        mv .pio/build/waveshare_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_WaveshareESP32S3RS485CAN.factory.bin
+        
+    - name: 🛠 Build ota image for BECom
+      run: |
+        pio run -e BECom_330
+        cp .pio/build/BECom_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_BECom_ES32S3.ota.bin
+        
+    - name: 🛠 Build factory image for BECom
+      run: |
+        esptool --chip esp32s3 merge-bin -o .pio/build/BECom_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 16MB 0x0000 .pio/build/BECom_330/bootloader.bin 0x8000 .pio/build/BECom_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/BECom_330/firmware.bin
+        mv .pio/build/BECom_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_BECom_ES32S3.factory.bin
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-          
-      - name: Install PlatformIO Core
-        run: pip install --upgrade platformio esptool
+    # 🚀 優化 2：新增 Artifact 上傳，並將 path 設為 output (包含剛剛修改的 info.txt)
+    - name: 📦 Upload firmware artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Firmware
+        path: output
 
-      # --- 🛠 1. Lilygo T-CAN 編譯區塊 ---
-      - name: 🛠 Build ota image for Lilygo T-CAN
-        run: |
-          pio run -e lilygo_330
-          cp .pio/build/lilygo_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_LilygoT-CAN485.ota.bin
-
-      - name: 🛠 Build factory image for Lilygo T-CAN
-        run: |
-          esptool --chip esp32 merge-bin -o .pio/build/lilygo_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 4MB 0x1000 .pio/build/lilygo_330/bootloader.bin 0x8000 .pio/build/lilygo_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/lilygo_330/firmware.bin
-          mv .pio/build/lilygo_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_LilygoT-CAN485.factory.bin
-
-      # --- 🛠 2. Lilygo 2-CAN 編譯區塊 ---
-      - name: 🛠 Build ota image for Lilygo 2-CAN
-        run: |
-          pio run -e lilygo_2CAN_330
-          cp .pio/build/lilygo_2CAN_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_LilygoT-2CAN.ota.bin
-
-      - name: 🛠 Build factory image for Lilygo 2-CAN
-        run: |
-          esptool --chip esp32s3 merge-bin -o .pio/build/lilygo_2CAN_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 16MB 0x0000 .pio/build/lilygo_2CAN_330/bootloader.bin 0x8000 .pio/build/lilygo_2CAN_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/lilygo_2CAN_330/firmware.bin
-          mv .pio/build/lilygo_2CAN_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_LilygoT-2CAN.factory.bin
-
-      # --- 🛠 3. Stark 編譯區塊 ---
-      - name: 🛠 Build ota image for Stark
-        run: |
-          pio run -e stark_330
-          cp .pio/build/stark_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_StarkCMR.ota.bin
-
-      - name: 🛠 Build factory image for Stark
-        run: |
-          esptool --chip esp32 merge-bin -o .pio/build/stark_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 8MB 0x1000 .pio/build/stark_330/bootloader.bin 0x8000 .pio/build/stark_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/stark_330/firmware.bin
-          mv .pio/build/stark_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_StarkCMR.factory.bin
-
-      # --- 🛠 4. Waveshare 編譯區塊 ---
-      - name: 🛠 Build ota image for Waveshare ESP32-S3-RS485-CAN
-        run: |
-          pio run -e waveshare_330
-          cp .pio/build/waveshare_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_WaveshareESP32S3RS485CAN.ota.bin
-
-      - name: 🛠 Build factory image for Waveshare ESP32-S3-RS485-CAN
-        run: |
-          esptool --chip esp32s3 merge-bin -o .pio/build/waveshare_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 16MB 0x0000 .pio/build/waveshare_330/bootloader.bin 0x8000 .pio/build/waveshare_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/waveshare_330/firmware.bin
-          mv .pio/build/waveshare_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_WaveshareESP32S3RS485CAN.factory.bin
-
-      # --- 🛠 5. BECom 編譯區塊 ---
-      - name: 🛠 Build ota image for BECom
-        run: |
-          pio run -e BECom_330
-          cp .pio/build/BECom_330/firmware.bin output/BE_${{ steps.vars.outputs.tag }}_BECom_ES32S3.ota.bin
-
-      - name: 🛠 Build factory image for BECom
-        run: |
-          esptool --chip esp32s3 merge-bin -o .pio/build/BECom_330/factory.bin --flash-mode dio --flash-freq 80m --flash-size 16MB 0x0000 .pio/build/BECom_330/bootloader.bin 0x8000 .pio/build/BECom_330/partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 .pio/build/BECom_330/firmware.bin
-          mv .pio/build/BECom_330/factory.bin output/BE_${{ steps.vars.outputs.tag }}_BECom_ES32S3.factory.bin
-
-      # --- 📦 優化點：上傳整齊的 output 資料夾做為 Artifact 備份 ---
-      - name: 📦 Upload firmware artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Firmware
-          path: output
-
-      # --- 📡 優化點：同時將 OTA 與 Factory 兩種韌體推送至 GitHub Release 頁面 ---
-      - name: 📡 Upload to GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.vars.outputs.tag }}
-          files: |
-            output/*.ota.bin
-            output/*.factory.bin
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # 🚀 優化 3 & 4：完全移除 Deploy Web Installer，並將 factory.bin 一併傳到 Release
+    - name: 📡 Upload to GitHub Release
+      uses: softprops/action-gh-release@v3
+      with:
+        tag_name: ${{ steps.vars.outputs.tag }}
+        files: |
+          output/*.ota.bin
+          output/*.factory.bin
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
